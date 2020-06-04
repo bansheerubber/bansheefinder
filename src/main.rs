@@ -161,24 +161,26 @@ impl Application for FuzzyFinder {
 
             Message::Submit => {
                 let command = self.search.clone().replace("!", "");
-                // if we have the ! modifier, then open the program in urxvt
-                if self.search.find("!") != None {
-                    process::Command::new("i3-msg")
-                    .arg("exec")
-                    .arg("exec urxvt -e bash -c")
-                    .arg(format!("\"{} && bash\"", &command))
-                    .output()
-                    .expect("Failed to exec urxvt");
-                }
-                else {
-                    process::Command::new("i3-msg")
-                    .arg("exec")
-                    .arg(&command)
-                    .output()
-                    .expect("Failed to exec");
-                }
+                if command.len() > 0 {
+                    // if we have the ! modifier, then open the program in urxvt
+                    if self.search.find("!") != None {
+                        process::Command::new("i3-msg")
+                        .arg("exec")
+                        .arg("exec urxvt -e bash -c")
+                        .arg(format!("\"{} && bash\"", &command))
+                        .output()
+                        .expect("Failed to exec urxvt");
+                    }
+                    else {
+                        process::Command::new("i3-msg")
+                        .arg("exec")
+                        .arg(&command)
+                        .output()
+                        .expect("Failed to exec");
+                    }
 
-                process::exit(0x0);
+                    process::exit(0x0);
+                }
             }
         }
 
