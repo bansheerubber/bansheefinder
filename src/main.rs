@@ -4,18 +4,41 @@ use std::process;
 use std::cmp::max;
 use std::cmp::min;
 use std::env;
+use std::fs::File;
 
 pub fn main() {
-    FuzzyFinder::run(Settings {
-        window: iced::window::Settings {
-            decorations: false,
-            resizable: false,
-            size: (300, 200),
-        },
-        antialiasing: false,
-        default_font: None,
-        flags: (),
-    });
+    // only open one finder at a time
+    let is_open = process::Command::new("pgrep")
+    .arg("bansheefinder")
+    .output()
+    .expect("Failed to pgrep")
+    .stdout
+    .iter()
+    .fold(
+        0,
+        |accumulator, value| {
+            if value == &0xA {
+                return accumulator + 1;
+            }
+            else {
+                return accumulator;
+            }
+        }
+    );
+    
+    if is_open == 1 {
+        File::create("/tmp/bansheefinder.lock").expect("Failed to create lock file");
+        FuzzyFinder::run(Settings {
+            window: iced::window::Settings {
+                decorations: false,
+                resizable: false,
+                size: (300, 200),
+            },
+            antialiasing: false,
+            default_font: None,
+            flags: (),
+        });
+    }
 }
 
 #[derive(Default)]
@@ -212,7 +235,7 @@ enum ProgramListMessage {
 
 fn autocomplete(search: &String, use_find: bool) -> Vec<String> {
     let new_search = search.clone().replace("!", "");
-    if &new_search.len() >= &3 {
+    if &new_search.len() >= &2 {
         if let Some(path) = env::var_os("PATH") {
             return env::split_paths(&path)
             .map(
@@ -235,13 +258,12 @@ fn autocomplete(search: &String, use_find: bool) -> Vec<String> {
                             || (use_find && entry.find(&new_search) == Some(0 as usize))
                         }
                     )
-                    .collect::<Vec<String>>();
                 }
             )
             .fold(
                 Vec::new(),
-                |mut accumulator, collection| {
-                    accumulator.append(&mut collection.clone());
+                |mut accumulator: Vec<String>, iterator| {
+                    accumulator.append(&mut iterator.collect::<Vec<String>>());
                     return accumulator;
                 }
             );
