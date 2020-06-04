@@ -235,7 +235,7 @@ enum ProgramListMessage {
 
 fn autocomplete(search: &String, use_find: bool) -> Vec<String> {
     let new_search = search.clone().replace("!", "");
-    if &new_search.len() >= &2 {
+    if new_search.len() >= 1 {
         if let Some(path) = env::var_os("PATH") {
             return env::split_paths(&path)
             .map(
