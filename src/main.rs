@@ -4,7 +4,6 @@ use std::process;
 use std::cmp::max;
 use std::cmp::min;
 use std::env;
-use std::fs::File;
 
 pub fn main() {
     // only open one finder at a time
@@ -27,7 +26,6 @@ pub fn main() {
     );
     
     if is_open == 1 {
-        File::create("/tmp/bansheefinder.lock").expect("Failed to create lock file");
         FuzzyFinder::run(Settings {
             window: iced::window::Settings {
                 decorations: false,
