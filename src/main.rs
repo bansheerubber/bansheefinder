@@ -1,4 +1,4 @@
-use iced::{Application, Element, TextInput, Settings, Column, Align, text_input, Text, Length, HorizontalAlignment, Container, Command, executor, Subscription, Color, Space, scrollable, Scrollable};
+use iced::{Application, Element, TextInput, Settings, Column, Align, text_input, Text, Length, HorizontalAlignment, Container, Command, executor, Subscription, Color, scrollable, Scrollable};
 use std::fs;
 use std::process;
 use std::cmp::max;
@@ -89,6 +89,9 @@ impl Application for FuzzyFinder {
                                 modifiers: _,
                             } => {
                                 match key_code {
+                                    iced_native::keyboard::KeyCode::Escape => {
+                                        process::exit(0);
+                                    }
                                     iced_native::keyboard::KeyCode::Tab => {
                                         let mut results = autocomplete(&self.search, true);
                                         sort_results(&mut results);
@@ -186,12 +189,6 @@ impl Application for FuzzyFinder {
                 .padding(7)
                 .style(style::TextInput)
                 .on_submit(Message::Submit)
-            )
-            .push(
-                Container::new(Space::with_height(Length::Units(1)))
-                .style(selected::Container)
-                .width(Length::Fill)
-                .height(Length::Units(1))
             )
             .push(
                 self.program_list.view()
