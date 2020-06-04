@@ -84,67 +84,64 @@ impl Application for FuzzyFinder {
                 match event {
                     iced_native::Event::Keyboard(input) => {
                         match input {
-                            iced_native::input::keyboard::Event::Input {
-                                state,
+                            iced_native::keyboard::Event::KeyPressed {
                                 key_code,
                                 modifiers: _,
                             } => {
-                                if state == iced_native::input::ButtonState::Pressed {
-                                    match key_code {
-                                        iced_native::input::keyboard::KeyCode::Tab => {
-                                            let mut results = autocomplete(&self.search, true);
-                                            sort_results(&mut results);
+                                match key_code {
+                                    iced_native::keyboard::KeyCode::Tab => {
+                                        let mut results = autocomplete(&self.search, true);
+                                        sort_results(&mut results);
 
-                                            if results.len() > 0 {
-                                                self.search = results.first().expect("Failed to get first autocomplete").clone();
-                                                self.search_saved = self.search.clone();
-                                                self.search_index = -1;
-                                                self.program_list.update(ProgramListMessage::Update(self.search.clone()));
-                                                // self.input.cursor().move_to(50);
+                                        if results.len() > 0 {
+                                            self.search = results.first().expect("Failed to get first autocomplete").clone();
+                                            self.search_saved = self.search.clone();
+                                            self.search_index = -1;
+                                            self.program_list.update(ProgramListMessage::Update(self.search.clone()));
+                                            // self.input.cursor().move_to(50);
 
-                                                // self.input = text_input::State::focused()
-                                                //println!("{:?}", self.input.cursor().state());
-                                            }
+                                            // self.input = text_input::State::focused()
+                                            //println!("{:?}", self.input.cursor().state());
                                         }
-                                        iced_native::input::keyboard::KeyCode::Down => {
-                                            let mut results = autocomplete(&self.search_saved, false);
-                                            sort_results(&mut results);
-                                            
-                                            if results.len() > 0 {
-                                                let mut first_time = false;
-                                                if self.search_index == -1 {
-                                                    first_time = true;
-                                                }
-
-                                                self.search_index = max(0, min(results.len() as i32 - 1, self.search_index + 1));
-
-                                                // if the first result is equal to our search, and we haven't used the arrow keys yet, then skip it
-                                                if
-                                                    results.get(self.search_index as usize).expect("Failed to get first autocomplete down") == &self.search
-                                                    && first_time
-                                                {
-                                                    self.search_index = max(0, min(results.len() as i32 - 1, self.search_index + 1));
-                                                }
-
-                                                self.search = results.get(self.search_index as usize).expect("Failed to get nth element down").clone();
-                                                self.program_list.update(ProgramListMessage::SearchIndex(self.search_index));
-                                            }
-                                        }
-                                        iced_native::input::keyboard::KeyCode::Up => {
-                                            let mut results = autocomplete(&self.search_saved, false);
-                                            sort_results(&mut results);
-                                            
-                                            if results.len() > 0 {
-                                                self.search_index = max(0, min(results.len() as i32 - 1, self.search_index - 1));
-                                                self.search = results.get(self.search_index as usize).expect("Failed to get nth element up").clone();
-                                                self.program_list.update(ProgramListMessage::SearchIndex(self.search_index));
-                                            }
-                                        }
-                                        _ => (),
                                     }
+                                    iced_native::keyboard::KeyCode::Down => {
+                                        let mut results = autocomplete(&self.search_saved, false);
+                                        sort_results(&mut results);
+                                        
+                                        if results.len() > 0 {
+                                            let mut first_time = false;
+                                            if self.search_index == -1 {
+                                                first_time = true;
+                                            }
+
+                                            self.search_index = max(0, min(results.len() as i32 - 1, self.search_index + 1));
+
+                                            // if the first result is equal to our search, and we haven't used the arrow keys yet, then skip it
+                                            if
+                                                results.get(self.search_index as usize).expect("Failed to get first autocomplete down") == &self.search
+                                                && first_time
+                                            {
+                                                self.search_index = max(0, min(results.len() as i32 - 1, self.search_index + 1));
+                                            }
+
+                                            self.search = results.get(self.search_index as usize).expect("Failed to get nth element down").clone();
+                                            self.program_list.update(ProgramListMessage::SearchIndex(self.search_index));
+                                        }
+                                    }
+                                    iced_native::keyboard::KeyCode::Up => {
+                                        let mut results = autocomplete(&self.search_saved, false);
+                                        sort_results(&mut results);
+                                        
+                                        if results.len() > 0 {
+                                            self.search_index = max(0, min(results.len() as i32 - 1, self.search_index - 1));
+                                            self.search = results.get(self.search_index as usize).expect("Failed to get nth element up").clone();
+                                            self.program_list.update(ProgramListMessage::SearchIndex(self.search_index));
+                                        }
+                                    }
+                                    _ => (),
                                 }
                             }
-                            iced_native::input::keyboard::Event::CharacterReceived(_) => ()
+                            _ => (),
                         }
                     }
 
