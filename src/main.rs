@@ -357,9 +357,9 @@ const UNTEXT_COLOR: Color = Color::from_rgb(
 );
 
 const SELECTION_COLOR: Color = Color::from_rgb(
-    0x58 as f32 / 255.0,
-    0x3C as f32 / 255.0,
-    0x63 as f32 / 255.0,
+    0x38 as f32 / 255.0,
+    0x26 as f32 / 255.0,
+    0x3F as f32 / 255.0,
 );
 
 mod style {
