@@ -3,6 +3,7 @@ use std::fs;
 use std::process;
 use std::cmp::max;
 use std::cmp::min;
+use std::env;
 
 pub fn main() {
     FuzzyFinder::run(Settings {
@@ -138,20 +139,23 @@ impl Application for FuzzyFinder {
             }
 
             Message::Submit => {
-                process::Command::new("i3-msg")
-                .arg("exec")
-                .arg(&self.search)
-                .output()
-                .expect("Failed to exec")
-                .stdout
-                .iter()
-                .fold(
-                    "".to_string(),
-                    |mut accumulator, entry| {
-                        accumulator.push(*entry as char);
-                        return accumulator;
-                    }
-                );
+                let command = self.search.clone().replace("!", "");
+                // if we have the ! modifier, then open the program in urxvt
+                if self.search.find("!") != None {
+                    process::Command::new("i3-msg")
+                    .arg("exec")
+                    .arg("exec urxvt -e bash -c")
+                    .arg(format!("\"{} && bash\"", &command))
+                    .output()
+                    .expect("Failed to exec urxvt");
+                }
+                else {
+                    process::Command::new("i3-msg")
+                    .arg("exec")
+                    .arg(&command)
+                    .output()
+                    .expect("Failed to exec");
+                }
 
                 process::exit(0x0);
             }
@@ -207,44 +211,44 @@ enum ProgramListMessage {
 }
 
 fn autocomplete(search: &String, use_find: bool) -> Vec<String> {
-    if &search.len() >= &3 {
-        // let collection = Command::new("pacman")
-        // .arg("-Qq")
-        // .output()
-        // .expect("Failed to pacman")
-        // .stdout
-        // .iter()
-        // .fold(
-        //     "".to_string(),
-        //     |mut accumulator, entry| {
-        //         accumulator.push(*entry as char);
-        //         return accumulator;
-        //     }
-        // );
-        
-        return fs::read_dir("/usr/bin/")
-        .expect("Unable to read directory")
-        .map(
-            |entry| {
-                entry
-                .as_ref()
-                .expect("Unable to unpack entry")
-                .file_name()
-                .into_string()
-                .expect("Failed to convert OsString to String")
-            }
-        )
-        .filter(
-            |entry| {
-                (!use_find && entry.find(search) != None)
-                || (use_find && entry.find(search) == Some(0 as usize))
-            }
-        )
-        .collect::<Vec<String>>();
+    let new_search = search.clone().replace("!", "");
+    if &new_search.len() >= &3 {
+        if let Some(path) = env::var_os("PATH") {
+            return env::split_paths(&path)
+            .map(
+                |entry| {
+                    return fs::read_dir(entry)
+                    .expect("Unable to read directory")
+                    .map(
+                        |entry| {
+                            entry
+                            .as_ref()
+                            .expect("Unable to unpack entry")
+                            .file_name()
+                            .into_string()
+                            .expect("Failed to convert OsString to String")
+                        }
+                    )
+                    .filter(
+                        |entry| {
+                            (!use_find && entry.find(&new_search) != None)
+                            || (use_find && entry.find(&new_search) == Some(0 as usize))
+                        }
+                    )
+                    .collect::<Vec<String>>();
+                }
+            )
+            .fold(
+                Vec::new(),
+                |mut accumulator, collection| {
+                    accumulator.append(&mut collection.clone());
+                    return accumulator;
+                }
+            );
+        }
     }
-    else {
-        return Vec::new();
-    }
+    
+    return Vec::new();
 }
 
 fn sort_results(results: &mut Vec<String>) {
@@ -319,7 +323,7 @@ impl ProgramList {
             Scrollable::new(&mut self.scroll)
             .push(container)
             .width(Length::Fill)
-            .height(Length::Fill)
+            .height(Length::Units(167))
             .style(style::Scrollable)
         )
         .width(Length::Fill)
