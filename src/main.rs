@@ -1,13 +1,15 @@
-use iced::{Application, Element, TextInput, Settings, Column, Align, text_input, Text, Length, HorizontalAlignment, Container, Command, executor, Subscription};
+use iced::{Application, Element, TextInput, Settings, Column, Align, text_input, Text, Length, HorizontalAlignment, Container, Command, executor, Subscription, Color, Space, scrollable, Scrollable};
 use std::fs;
 use std::process;
+use std::cmp::max;
+use std::cmp::min;
 
 pub fn main() {
     FuzzyFinder::run(Settings {
         window: iced::window::Settings {
             decorations: false,
             resizable: false,
-            size: (500, 500),
+            size: (300, 200),
         },
         antialiasing: false,
         default_font: None,
@@ -20,6 +22,8 @@ struct FuzzyFinder {
     program_list: ProgramList,
     input: text_input::State,
     search: String,
+    search_saved: String,
+    search_index: i32,
 }
 
 #[derive(Debug, Clone)]
@@ -39,6 +43,8 @@ impl Application for FuzzyFinder {
             program_list: ProgramList::default(),
             input: text_input::State::focused(),
             search: String::from(""),
+            search_saved: String::from(""),
+            search_index: 0,
         }, Command::none());
     }
 
@@ -69,6 +75,8 @@ impl Application for FuzzyFinder {
 
                                             if results.len() > 0 {
                                                 self.search = results.first().expect("Failed to get first autocomplete").clone();
+                                                self.search_saved = self.search.clone();
+                                                self.search_index = -1;
                                                 self.program_list.update(ProgramListMessage::Update(self.search.clone()));
                                                 // self.input.cursor().move_to(50);
 
@@ -76,11 +84,44 @@ impl Application for FuzzyFinder {
                                                 //println!("{:?}", self.input.cursor().state());
                                             }
                                         }
+                                        iced_native::input::keyboard::KeyCode::Down => {
+                                            let mut results = autocomplete(&self.search_saved, false);
+                                            sort_results(&mut results);
+                                            
+                                            if results.len() > 0 {
+                                                let mut first_time = false;
+                                                if self.search_index == -1 {
+                                                    first_time = true;
+                                                }
+
+                                                self.search_index = max(0, min(results.len() as i32 - 1, self.search_index + 1));
+
+                                                // if the first result is equal to our search, and we haven't used the arrow keys yet, then skip it
+                                                if
+                                                    results.get(self.search_index as usize).expect("Failed to get first autocomplete down") == &self.search
+                                                    && first_time
+                                                {
+                                                    self.search_index = max(0, min(results.len() as i32 - 1, self.search_index + 1));
+                                                }
+
+                                                self.search = results.get(self.search_index as usize).expect("Failed to get nth element down").clone();
+                                                self.program_list.update(ProgramListMessage::SearchIndex(self.search_index));
+                                            }
+                                        }
+                                        iced_native::input::keyboard::KeyCode::Up => {
+                                            let mut results = autocomplete(&self.search_saved, false);
+                                            sort_results(&mut results);
+                                            
+                                            if results.len() > 0 {
+                                                self.search_index = max(0, min(results.len() as i32 - 1, self.search_index - 1));
+                                                self.search = results.get(self.search_index as usize).expect("Failed to get nth element up").clone();
+                                                self.program_list.update(ProgramListMessage::SearchIndex(self.search_index));
+                                            }
+                                        }
                                         _ => (),
                                     }
                                 }
                             }
-                            
                             iced_native::input::keyboard::Event::CharacterReceived(_) => ()
                         }
                     }
@@ -91,6 +132,8 @@ impl Application for FuzzyFinder {
             
             Message::InputTyped(value) => {
                 self.search = value.clone();
+                self.search_saved = self.search.clone();
+                self.search_index = -1;
                 self.program_list.update(ProgramListMessage::Update(value));
             }
 
@@ -118,23 +161,35 @@ impl Application for FuzzyFinder {
     }
 
     fn view(&mut self) -> Element<Message> {
-        return Column::new()
-        .padding(1)
-        .align_items(Align::Center)
-        .push(
-            TextInput::new(
-                &mut self.input,
-                "",
-                &self.search,
-                Message::InputTyped,
+        return Container::new(
+            Column::new()
+            .padding(0)
+            .align_items(Align::Center)
+            .push(
+                TextInput::new(
+                    &mut self.input,
+                    "",
+                    &self.search,
+                    Message::InputTyped,
+                )
+                .size(15)
+                .padding(7)
+                .style(style::TextInput)
+                .on_submit(Message::Submit)
             )
-            .padding(8)
-            .style(style::TextInput)
-            .on_submit(Message::Submit)
+            .push(
+                Container::new(Space::with_height(Length::Units(1)))
+                .style(selected::Container)
+                .width(Length::Fill)
+                .height(Length::Units(1))
+            )
+            .push(
+                self.program_list.view()
+            )
         )
-        .push(
-            self.program_list.view()
-        )
+        .style(selected::Container)
+        .height(Length::Fill)
+        .padding(1)
         .into();
     }
 }
@@ -142,9 +197,12 @@ impl Application for FuzzyFinder {
 #[derive(Default)]
 struct ProgramList {
     search: String,
+    search_index: i32,
+    scroll: scrollable::State,
 }
 
 enum ProgramListMessage {
+    SearchIndex(i32),
     Update(String),
 }
 
@@ -203,84 +261,125 @@ impl ProgramList {
             ProgramListMessage::Update(value) => {
                 *self = ProgramList {
                     search: value,
+                    search_index: -1,
+                    scroll: self.scroll,
+                }
+            }
+
+            ProgramListMessage::SearchIndex(value) => {
+                *self = ProgramList {
+                    search: self.search.clone(),
+                    search_index: value,
+                    scroll: self.scroll,
                 }
             }
         }
     }
 
     fn view(&mut self) -> Element<Message> {
-        let mut container = Column::new()
-        .padding(1);
-
+        let mut container = Column::new();
         let mut results = autocomplete(&self.search, false);
         sort_results(&mut results);
-        for result in results {
-            container = container.push(
-                Text::new(result)
-                .width(Length::Fill)
-                .size(15)
-                .color([0.5, 0.5, 0.5])
-                .horizontal_alignment(HorizontalAlignment::Left)
-            );
+        let mut index = 0;
+        for mut result in results {
+            result.insert_str(0, " ");
+            if index == self.search_index {
+                container = container.push(
+                    Container::new(
+                        Text::new(result)
+                        .width(Length::Fill)
+                        .size(10)
+                        .color(TEXT_COLOR)
+                        .horizontal_alignment(HorizontalAlignment::Left)
+                    )
+                    .style(selected::Container)
+                    .padding(3)
+                    .width(Length::Fill)
+                );
+            }
+            else {
+                container = container.push(
+                    Container::new(
+                        Text::new(result)
+                        .width(Length::Fill)
+                        .size(10)
+                        .color(UNTEXT_COLOR)
+                        .horizontal_alignment(HorizontalAlignment::Left)
+                    )
+                    .style(style::Container)
+                    .padding(3)
+                    .width(Length::Fill)
+                );
+            }
+
+            index = index + 1;
         }
         
-        return Container::new(container)
+        return Container::new(
+            Scrollable::new(&mut self.scroll)
+            .push(container)
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .style(style::Scrollable)
+        )
         .width(Length::Fill)
+        .height(Length::Fill)
+        .style(style::Container)
         .into()
     }
 }
 
+const DARK_PURPLE: Color = Color::from_rgb(
+    0x1E as f32 / 255.0,
+    0x12 as f32 / 255.0,
+    0x1E as f32 / 255.0,
+);
+
+const TEXT_COLOR: Color = Color::from_rgb(
+    0xB7 as f32 / 255.0,
+    0xAC as f32 / 255.0,
+    0xB7 as f32 / 255.0,
+);
+
+const UNTEXT_COLOR: Color = Color::from_rgb(
+    0x80 as f32 / 255.0,
+    0x78 as f32 / 255.0,
+    0x80 as f32 / 255.0,
+);
+
+const SELECTION_COLOR: Color = Color::from_rgb(
+    0x58 as f32 / 255.0,
+    0x3C as f32 / 255.0,
+    0x63 as f32 / 255.0,
+);
+
 mod style {
-    use iced::{text_input, Background, Color};
-    
-    const DARK_PURPLE: Color = Color::from_rgb(
-        0x1E as f32 / 255.0,
-        0x12 as f32 / 255.0,
-        0x1E as f32 / 255.0,
-    );
-
-    const TEXT_COLOR: Color = Color::from_rgb(
-        0xB7 as f32 / 255.0,
-        0xAC as f32 / 255.0,
-        0xB7 as f32 / 255.0,
-    );
-
-    const UNTEXT_COLOR: Color = Color::from_rgb(
-        0x1E as f32 / 255.0,
-        0x12 as f32 / 255.0,
-        0x1E as f32 / 255.0,
-    );
-
-    const SELECTION_COLOR: Color = Color::from_rgb(
-        0x58 as f32 / 255.0,
-        0x3C as f32 / 255.0,
-        0x63 as f32 / 255.0,
-    );
+    use iced::{text_input, Background, Color, container, scrollable};
 
     pub struct TextInput;
 
     impl text_input::StyleSheet for TextInput {
         fn active(&self) -> text_input::Style {
             return text_input::Style {
-                background: Background::Color(DARK_PURPLE),
+                background: Background::Color(super::DARK_PURPLE),
                 border_radius: 0,
                 border_width: 1,
-                border_color: DARK_PURPLE,
+                border_color: super::DARK_PURPLE,
             };
         }
 
         fn value_color(&self) -> Color {
-            return TEXT_COLOR;
+            return super::TEXT_COLOR;
         }
 
         fn placeholder_color(&self) -> Color {
-            return UNTEXT_COLOR;
+            return super::UNTEXT_COLOR;
         }
 
         fn focused(&self) -> text_input::Style {
             return text_input::Style {
                 border_width: 1,
-                border_color: DARK_PURPLE,
+                border_color: super::DARK_PURPLE,
                 ..self.active()
             };
         }
@@ -292,7 +391,69 @@ mod style {
         }
 
         fn selection_color(&self) -> Color {
-            return SELECTION_COLOR;
+            return super::SELECTION_COLOR;
+        }
+    }
+
+
+    pub struct Container;
+    
+    impl container::StyleSheet for Container {
+        fn style(&self) -> container::Style {
+            container::Style {
+                background: Some(Background::Color(super::DARK_PURPLE)),
+                text_color: Some(Color::from_rgb(0.0, 0.0, 0.0)),
+                ..container::Style::default()
+            }
+        }
+    }
+
+    pub struct Scrollable;
+
+    impl scrollable::StyleSheet for Scrollable {
+        fn active(&self) -> scrollable::Scrollbar {
+            scrollable::Scrollbar {
+                background: Some(Background::Color(Color::TRANSPARENT)),
+                border_radius: 0,
+                border_width: 0,
+                border_color: Color::TRANSPARENT,
+                scroller: scrollable::Scroller {
+                    color: super::SELECTION_COLOR,
+                    border_radius: 5,
+                    border_width: 1,
+                    border_color: super::DARK_PURPLE,
+                },
+            }
+        }
+
+        fn hovered(&self) -> scrollable::Scrollbar {
+            let active = self.active();
+            scrollable::Scrollbar {
+                ..active
+            }
+        }
+
+        fn dragging(&self) -> scrollable::Scrollbar {
+            let active = self.active();
+            scrollable::Scrollbar {
+                ..active
+            }
+        }
+    }
+}
+
+mod selected {
+    use iced::{container, Background};
+
+    pub struct Container;
+    
+    impl container::StyleSheet for Container {
+        fn style(&self) -> container::Style {
+            container::Style {
+                background: Some(Background::Color(super::SELECTION_COLOR)),
+                text_color: Some(super::TEXT_COLOR),
+                ..container::Style::default()
+            }
         }
     }
 }
