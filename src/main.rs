@@ -109,21 +109,7 @@ impl Application for FuzzyFinder {
                                         sort_results(&mut results);
                                         
                                         if results.len() > 0 {
-                                            let mut first_time = false;
-                                            if self.search_index == -1 {
-                                                first_time = true;
-                                            }
-
                                             self.search_index = max(0, min(results.len() as i32 - 1, self.search_index + 1));
-
-                                            // if the first result is equal to our search, and we haven't used the arrow keys yet, then skip it
-                                            if
-                                                results.get(self.search_index as usize).expect("Failed to get first autocomplete down") == &self.search
-                                                && first_time
-                                            {
-                                                self.search_index = max(0, min(results.len() as i32 - 1, self.search_index + 1));
-                                            }
-
                                             self.search = results.get(self.search_index as usize).expect("Failed to get nth element down").clone();
                                             self.program_list.update(ProgramListMessage::SearchIndex(self.search_index));
                                         }
