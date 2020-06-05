@@ -101,10 +101,7 @@ impl Application for FuzzyFinder {
                                             self.search_saved = self.search.clone();
                                             self.search_index = -1;
                                             self.program_list.update(ProgramListMessage::Update(self.search.clone()));
-                                            // self.input.cursor().move_to(50);
-
-                                            // self.input = text_input::State::focused()
-                                            //println!("{:?}", self.input.cursor().state());
+                                            self.input.move_cursor_to_end(&self.search);
                                         }
                                     }
                                     iced_native::keyboard::KeyCode::Down => {
@@ -114,6 +111,7 @@ impl Application for FuzzyFinder {
                                         if results.len() > 0 {
                                             self.search_index = max(0, min(results.len() as i32 - 1, self.search_index + 1));
                                             self.search = results.get(self.search_index as usize).expect("Failed to get nth element down").clone();
+                                            self.input.move_cursor_to_end(&self.search);
                                             self.program_list.update(ProgramListMessage::SearchIndex(self.search_index));
                                         }
                                     }
@@ -124,6 +122,7 @@ impl Application for FuzzyFinder {
                                         if results.len() > 0 {
                                             self.search_index = max(0, min(results.len() as i32 - 1, self.search_index - 1));
                                             self.search = results.get(self.search_index as usize).expect("Failed to get nth element up").clone();
+                                            self.input.move_cursor_to_end(&self.search);
                                             self.program_list.update(ProgramListMessage::SearchIndex(self.search_index));
                                         }
                                     }
