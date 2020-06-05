@@ -99,8 +99,9 @@ impl Application for FuzzyFinder {
                                         if results.len() > 0 {
                                             self.search = results.first().expect("Failed to get first autocomplete").clone();
                                             self.search_saved = self.search.clone();
-                                            self.search_index = -1;
+                                            self.search_index = 0;
                                             self.program_list.update(ProgramListMessage::Update(self.search.clone()));
+                                            self.program_list.update(ProgramListMessage::SearchIndex(0));
                                             self.input.move_cursor_to_end(&self.search);
                                         }
                                     }
