@@ -147,7 +147,9 @@ impl Application for FuzzyFinder {
 
             Message::Submit => {
                 let command = self.search.clone().replace("!", "");
-                if command.len() > 0 {
+                let results = autocomplete(&command, true);
+                // only execute the command if we found it in our list
+                if command.len() > 0 && results.iter().position(|x| x == &command) != None {
                     // if we have the ! modifier, then open the program in urxvt
                     if self.search.find("!") != None {
                         process::Command::new("i3-msg")
