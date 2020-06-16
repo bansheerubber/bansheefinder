@@ -41,6 +41,7 @@ pub fn main() {
 
 #[derive(Default)]
 struct FuzzyFinder {
+    path_cache: Vec<String>,
     program_list: ProgramList,
     input: text_input::State,
     search: String,
@@ -62,6 +63,7 @@ impl Application for FuzzyFinder {
 
     fn new(_flags: ()) -> (FuzzyFinder, Command<Message>) {
         return (FuzzyFinder {
+            path_cache: generate_directories(),
             program_list: ProgramList::default(),
             input: text_input::State::focused(),
             search: String::from(""),
@@ -93,20 +95,20 @@ impl Application for FuzzyFinder {
                                         process::exit(0);
                                     }
                                     iced_native::keyboard::KeyCode::Tab => {
-                                        let mut results = autocomplete(&self.search, true);
+                                        let mut results = autocomplete(&self.search, &self.path_cache, true);
                                         sort_results(&mut results);
 
                                         if results.len() > 0 {
                                             self.search = results.first().expect("Failed to get first autocomplete").clone();
                                             self.search_saved = self.search.clone();
                                             self.search_index = 0;
-                                            self.program_list.update(ProgramListMessage::Update(self.search.clone()));
+                                            self.program_list.update(ProgramListMessage::Update(self.search.clone(), results));
                                             self.program_list.update(ProgramListMessage::SearchIndex(0));
                                             self.input.move_cursor_to_end();
                                         }
                                     }
                                     iced_native::keyboard::KeyCode::Down => {
-                                        let mut results = autocomplete(&self.search_saved, false);
+                                        let mut results = autocomplete(&self.search_saved, &self.path_cache, false);
                                         sort_results(&mut results);
                                         
                                         if results.len() > 0 {
@@ -117,7 +119,7 @@ impl Application for FuzzyFinder {
                                         }
                                     }
                                     iced_native::keyboard::KeyCode::Up => {
-                                        let mut results = autocomplete(&self.search_saved, false);
+                                        let mut results = autocomplete(&self.search_saved, &self.path_cache, false);
                                         sort_results(&mut results);
                                         
                                         if results.len() > 0 {
@@ -142,7 +144,11 @@ impl Application for FuzzyFinder {
                 self.search = value.clone();
                 self.search_saved = self.search.clone();
                 self.search_index = -1;
-                self.program_list.update(ProgramListMessage::Update(value));
+
+                let mut results = autocomplete(&self.search_saved, &self.path_cache, false);
+                sort_results(&mut results);
+
+                self.program_list.update(ProgramListMessage::Update(value, results));
             }
 
             Message::Submit => {
@@ -206,47 +212,61 @@ struct ProgramList {
     search: String,
     search_index: i32,
     scroll: scrollable::State,
+    results: Vec<String>
 }
 
 enum ProgramListMessage {
     SearchIndex(i32),
-    Update(String),
+    Update(String, Vec<String>),
 }
 
-fn autocomplete(search: &String, use_find: bool) -> Vec<String> {
+// reads directories from path and puts results into cache
+fn generate_directories() -> Vec<String> {
+    if let Some(path) = env::var_os("PATH") {
+        return env::split_paths(&path)
+        .map(
+            |entry| {
+                return fs::read_dir(entry)
+                .expect("Unable to read directory")
+                .map(
+                    |entry| {
+                        entry
+                        .as_ref()
+                        .expect("Unable to unpack entry")
+                        .file_name()
+                        .into_string()
+                        .expect("Failed to convert OsString to String")
+                    }
+                )
+            }
+        )
+        .fold(
+            Vec::new(),
+            |mut accumulator: Vec<String>, iterator| {
+                accumulator.append(&mut iterator.collect::<Vec<String>>());
+                return accumulator;
+            }
+        );
+    }
+    else {
+        return Vec::new();
+    }
+}
+
+fn autocomplete(search: &String, path_cache: &Vec<String>, use_find: bool) -> Vec<String> {
     let new_search = search.clone().replace("!", "");
     if new_search.len() >= 1 {
         if let Some(path) = env::var_os("PATH") {
-            return env::split_paths(&path)
-            .map(
+            return path_cache
+            .iter()
+            .cloned()
+            .filter(
                 |entry| {
-                    return fs::read_dir(entry)
-                    .expect("Unable to read directory")
-                    .map(
-                        |entry| {
-                            entry
-                            .as_ref()
-                            .expect("Unable to unpack entry")
-                            .file_name()
-                            .into_string()
-                            .expect("Failed to convert OsString to String")
-                        }
-                    )
-                    .filter(
-                        |entry| {
-                            (!use_find && entry.find(&new_search) != None)
-                            || (use_find && entry.find(&new_search) == Some(0 as usize))
-                        }
-                    )
+                    (!use_find && entry.find(&new_search) != None)
+                    || (use_find && entry.find(&new_search) == Some(0 as usize))
                 }
             )
-            .fold(
-                Vec::new(),
-                |mut accumulator: Vec<String>, iterator| {
-                    accumulator.append(&mut iterator.collect::<Vec<String>>());
-                    return accumulator;
-                }
-            );
+            .collect();
         }
     }
     
@@ -264,11 +284,12 @@ fn sort_results(results: &mut Vec<String>) {
 impl ProgramList {
     fn update(&mut self, message: ProgramListMessage) {
         match message {
-            ProgramListMessage::Update(value) => {
+            ProgramListMessage::Update(value, results) => {
                 *self = ProgramList {
                     search: value,
                     search_index: -1,
                     scroll: self.scroll,
+                    results
                 }
             }
 
@@ -277,6 +298,7 @@ impl ProgramList {
                     search: self.search.clone(),
                     search_index: value,
                     scroll: self.scroll,
+                    results: self.results.clone()
                 }
             }
         }
@@ -284,15 +306,14 @@ impl ProgramList {
 
     fn view(&mut self) -> Element<Message> {
         let mut container = Column::new();
-        let mut results = autocomplete(&self.search, false);
-        sort_results(&mut results);
         let mut index = 0;
-        for mut result in results {
-            result.insert_str(0, " ");
+        for result in &self.results {
+            let mut new_result = result.clone();
+            new_result.insert_str(0, " ");
             if index == self.search_index {
                 container = container.push(
                     Container::new(
-                        Text::new(result)
+                        Text::new(new_result)
                         .width(Length::Fill)
                         .size(10)
                         .color(TEXT_COLOR)
@@ -306,7 +327,7 @@ impl ProgramList {
             else {
                 container = container.push(
                     Container::new(
-                        Text::new(result)
+                        Text::new(new_result)
                         .width(Length::Fill)
                         .size(10)
                         .color(UNTEXT_COLOR)
